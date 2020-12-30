@@ -1947,17 +1947,6 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
             }
         }
         
-        if (options?.useOnDownloadStart)! {
-            let mimeType = navigationResponse.response.mimeType
-            if let url = navigationResponse.response.url, navigationResponse.isForMainFrame {
-                if mimeType != nil && !mimeType!.starts(with: "text/") {
-                    onDownloadStart(url: url.absoluteString)
-                    decisionHandler(.cancel)
-                    return
-                }
-            }
-        }
-        
         decisionHandler(.allow)
     }
     
