@@ -2467,7 +2467,6 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
         )
 
         InAppWebView.windowWebViews[windowId] = webViewTransport
-        windowWebView.stopLoading()
         
         let arguments: [String: Any?] = [
             "url": navigationAction.request.url?.absoluteString,
@@ -2477,8 +2476,10 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
             "iosWKNavigationType": navigationAction.navigationType.rawValue,
             "iosIsForMainFrame": navigationAction.targetFrame?.isMainFrame ?? false
         ]
+        
+        print("call OnCreateWindow on swift url : \(navigationAction.request.url?.absoluteString)")
+
         channel?.invokeMethod("onCreateWindow", arguments: arguments, result: { (result) -> Void in
-            print("call OnCreateWindow on swift")
             if result is FlutterError {
                 print((result as! FlutterError).message ?? "")
                 if InAppWebView.windowWebViews[windowId] != nil {
