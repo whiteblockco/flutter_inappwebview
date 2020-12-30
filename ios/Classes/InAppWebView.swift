@@ -2477,6 +2477,7 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
             "iosIsForMainFrame": navigationAction.targetFrame?.isMainFrame ?? false
         ]
         channel?.invokeMethod("onCreateWindow", arguments: arguments, result: { (result) -> Void in
+            print("call OnCreateWindow on swift")
             if result is FlutterError {
                 print((result as! FlutterError).message ?? "")
                 if InAppWebView.windowWebViews[windowId] != nil {
