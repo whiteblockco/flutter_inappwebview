@@ -2454,6 +2454,7 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
                         createWebViewWith configuration: WKWebViewConfiguration,
                   for navigationAction: WKNavigationAction,
                   windowFeatures: WKWindowFeatures) -> WKWebView? {
+        if (navigationAction.request.url?.absoluteString ?? "" == "" || navigationAction.request.url == nil) { return nil }
         InAppWebView.windowAutoincrementId += 1
         let windowId = InAppWebView.windowAutoincrementId
         
