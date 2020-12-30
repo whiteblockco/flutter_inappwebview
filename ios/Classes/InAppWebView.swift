@@ -1873,61 +1873,12 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
         
         return result;
     }
+  
+  public func webView(_ webView: WKWebView, authenticationChallenge challenge: URLAuthenticationChallenge, shouldAllowDeprecatedTLS decisionHandler: @escaping (Bool) -> Void) {
+    decisionHandler(true)
+  }
     
-    public func webView(_ webView: WKWebView,
-                 decidePolicyFor navigationAction: WKNavigationAction,
-                 decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        
-        if let url = navigationAction.request.url {
-            
-            if activateShouldOverrideUrlLoading && (options?.useShouldOverrideUrlLoading)! {
-                
-                let isForMainFrame = navigationAction.targetFrame?.isMainFrame ?? false
-                
-                shouldOverrideUrlLoading(url: url, method: navigationAction.request.httpMethod, headers: navigationAction.request.allHTTPHeaderFields, isForMainFrame: isForMainFrame, navigationType: navigationAction.navigationType, result: { (result) -> Void in
-                    if result is FlutterError {
-                        print((result as! FlutterError).message ?? "")
-                        decisionHandler(.allow)
-                        return
-                    }
-                    else if (result as? NSObject) == FlutterMethodNotImplemented {
-                        self.updateUrlTextFieldForIABController(navigationAction: navigationAction)
-                        decisionHandler(.allow)
-                        return
-                    }
-                    else {
-                        var response: [String: Any]
-                        if let r = result {
-                            response = r as! [String: Any]
-                            var action = response["action"] as? Int
-                            action = action != nil ? action : 0;
-                            switch action {
-                                case 1:
-                                    self.updateUrlTextFieldForIABController(navigationAction: navigationAction)
-                                    decisionHandler(.allow)
-                                    break
-                                default:
-                                    decisionHandler(.cancel)
-                            }
-                            return;
-                        }
-                        self.updateUrlTextFieldForIABController(navigationAction: navigationAction)
-                        decisionHandler(.allow)
-                    }
-                })
-                return
-                
-            }
-            
-            updateUrlTextFieldForIABController(navigationAction: navigationAction)
-        }
-        
-        if !activateShouldOverrideUrlLoading {
-            activateShouldOverrideUrlLoading = true
-        }
-        
-        decisionHandler(.allow)
-    }
+    
     
     public func updateUrlTextFieldForIABController(navigationAction: WKNavigationAction) {
         if navigationAction.navigationType == .linkActivated || navigationAction.navigationType == .backForward {
@@ -2010,170 +1961,7 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
         }
     }
     
-    public func webView(_ webView: WKWebView, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
-        
-        if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPBasic ||
-            challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodDefault ||
-            challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodHTTPDigest {
-            let host = challenge.protectionSpace.host
-            let prot = challenge.protectionSpace.protocol
-            let realm = challenge.protectionSpace.realm
-            let port = challenge.protectionSpace.port
-            onReceivedHttpAuthRequest(challenge: challenge, result: {(result) -> Void in
-                if result is FlutterError {
-                    print((result as! FlutterError).message ?? "")
-                }
-                else if (result as? NSObject) == FlutterMethodNotImplemented {
-                    completionHandler(.performDefaultHandling, nil)
-                }
-                else {
-                    var response: [String: Any]
-                    if let r = result {
-                        response = r as! [String: Any]
-                        var action = response["action"] as? Int
-                        action = action != nil ? action : 0;
-                        switch action {
-                            case 0:
-                                InAppWebView.credentialsProposed = []
-                                // used .performDefaultHandling to mantain consistency with Android
-                                // because .cancelAuthenticationChallenge will call webView(_:didFail:withError:)
-                                completionHandler(.performDefaultHandling, nil)
-                                //completionHandler(.cancelAuthenticationChallenge, nil)
-                                break
-                            case 1:
-                                let username = response["username"] as! String
-                                let password = response["password"] as! String
-                                let permanentPersistence = response["permanentPersistence"] as? Bool ?? false
-                                let persistence = (permanentPersistence) ? URLCredential.Persistence.permanent : URLCredential.Persistence.forSession
-                                let credential = URLCredential(user: username, password: password, persistence: persistence)
-                                completionHandler(.useCredential, credential)
-                                break
-                            case 2:
-                                if InAppWebView.credentialsProposed.count == 0 {
-                                    for (protectionSpace, credentials) in CredentialDatabase.credentialStore!.allCredentials {
-                                        if protectionSpace.host == host && protectionSpace.realm == realm &&
-                                        protectionSpace.protocol == prot && protectionSpace.port == port {
-                                            for credential in credentials {
-                                                InAppWebView.credentialsProposed.append(credential.value)
-                                            }
-                                            break
-                                        }
-                                    }
-                                }
-                                if InAppWebView.credentialsProposed.count == 0, let credential = challenge.proposedCredential {
-                                    InAppWebView.credentialsProposed.append(credential)
-                                }
-                                
-                                if let credential = InAppWebView.credentialsProposed.popLast() {
-                                    completionHandler(.useCredential, credential)
-                                }
-                                else {
-                                    completionHandler(.performDefaultHandling, nil)
-                                }
-                                break
-                            default:
-                                InAppWebView.credentialsProposed = []
-                                completionHandler(.performDefaultHandling, nil)
-                        }
-                        return;
-                    }
-                    completionHandler(.performDefaultHandling, nil)
-                }
-            })
-        }
-        else if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust {
-
-            guard let serverTrust = challenge.protectionSpace.serverTrust else {
-                completionHandler(.performDefaultHandling, nil)
-                return
-            }
-
-            onReceivedServerTrustAuthRequest(challenge: challenge, result: {(result) -> Void in
-                if result is FlutterError {
-                    print((result as! FlutterError).message ?? "")
-                }
-                else if (result as? NSObject) == FlutterMethodNotImplemented {
-                    completionHandler(.performDefaultHandling, nil)
-                }
-                else {
-                    var response: [String: Any]
-                    if let r = result {
-                        response = r as! [String: Any]
-                        var action = response["action"] as? Int
-                        action = action != nil ? action : 0;
-                        switch action {
-                            case 0:
-                                InAppWebView.credentialsProposed = []
-                                completionHandler(.cancelAuthenticationChallenge, nil)
-                                break
-                            case 1:
-                                let exceptions = SecTrustCopyExceptions(serverTrust)
-                                SecTrustSetExceptions(serverTrust, exceptions)
-                                let credential = URLCredential(trust: serverTrust)
-                                completionHandler(.useCredential, credential)
-                                break
-                            default:
-                                InAppWebView.credentialsProposed = []
-                                completionHandler(.performDefaultHandling, nil)
-                        }
-                        return;
-                    }
-                    completionHandler(.performDefaultHandling, nil)
-                }
-            })
-        }
-        else if challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodClientCertificate {
-            onReceivedClientCertRequest(challenge: challenge, result: {(result) -> Void in
-                if result is FlutterError {
-                    print((result as! FlutterError).message ?? "")
-                }
-                else if (result as? NSObject) == FlutterMethodNotImplemented {
-                    completionHandler(.performDefaultHandling, nil)
-                }
-                else {
-                    var response: [String: Any]
-                    if let r = result {
-                        response = r as! [String: Any]
-                        var action = response["action"] as? Int
-                        action = action != nil ? action : 0;
-                        switch action {
-                            case 0:
-                                completionHandler(.cancelAuthenticationChallenge, nil)
-                                break
-                            case 1:
-                                let certificatePath = response["certificatePath"] as! String;
-                                let certificatePassword = response["certificatePassword"] as? String ?? "";
-                                
-                                let key = SwiftFlutterPlugin.instance!.registrar!.lookupKey(forAsset: certificatePath)
-                                let path = Bundle.main.path(forResource: key, ofType: nil)!
-                                let PKCS12Data = NSData(contentsOfFile: path)!
-                                
-                                if let identityAndTrust: IdentityAndTrust = self.extractIdentity(PKCS12Data: PKCS12Data, password: certificatePassword) {
-                                    let urlCredential: URLCredential = URLCredential(
-                                        identity: identityAndTrust.identityRef,
-                                        certificates: identityAndTrust.certArray as? [AnyObject],
-                                        persistence: URLCredential.Persistence.forSession);
-                                    completionHandler(.useCredential, urlCredential)
-                                } else {
-                                    completionHandler(.performDefaultHandling, nil)
-                                }
-                                break
-                            case 2:
-                                completionHandler(.cancelAuthenticationChallenge, nil)
-                                break
-                            default:
-                                completionHandler(.performDefaultHandling, nil)
-                        }
-                        return;
-                    }
-                    completionHandler(.performDefaultHandling, nil)
-                }
-            })
-        }
-        else {
-            completionHandler(.performDefaultHandling, nil)
-        }
-    }
+    
     
     struct IdentityAndTrust {
 
@@ -2438,6 +2226,8 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
         lastScrollX = scrollView.contentOffset.x
         lastScrollY = scrollView.contentOffset.y
     }
+  
+  var popupView: WKWebView?
     
     public func webView(_ webView: WKWebView,
                         createWebViewWith configuration: WKWebViewConfiguration,
@@ -2467,39 +2257,56 @@ public class InAppWebView: WKWebView, UIScrollViewDelegate, WKUIDelegate, WKNavi
         ]
         
         print("call OnCreateWindow on swift url : \(navigationAction.request.url?.absoluteString)")
+      if let firstViewFrame = self.scrollView.subviews.first?.frame {
+        popupView = WKWebView(frame: firstViewFrame, configuration: configuration)
+      } else {
+        popupView = WKWebView(frame: UIScreen.main.bounds, configuration: configuration)
+      }
+      
+      popupView?.backgroundColor = UIColor.white
+      popupView?.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+      popupView?.navigationDelegate = self
+      popupView?.uiDelegate = self
+      self.scrollView.addSubview(popupView!)
+      self.scrollView.setContentOffset(CGPoint(x: 0, y: 0), animated: false)
 
-        channel?.invokeMethod("onCreateWindow", arguments: arguments, result: { (result) -> Void in
-            if result is FlutterError {
-                print((result as! FlutterError).message ?? "")
-                if InAppWebView.windowWebViews[windowId] != nil {
-                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
-                }
-                return
-            }
-            else if (result as? NSObject) == FlutterMethodNotImplemented {
-                self.updateUrlTextFieldForIABController(navigationAction: navigationAction)
-                if InAppWebView.windowWebViews[windowId] != nil {
-                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
-                }
-                return
-            }
-            else {
-                var handledByClient = false
-                if result != nil, result is Bool {
-                    handledByClient = result as! Bool
-                }
-                if !handledByClient, InAppWebView.windowWebViews[windowId] != nil {
-                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
-                }
-            }
-        })
+//        channel?.invokeMethod("onCreateWindow", arguments: arguments, result: { (result) -> Void in
+//            if result is FlutterError {
+//              print("result is FlutterError")
+//                print((result as! FlutterError).message ?? "")
+//                if InAppWebView.windowWebViews[windowId] != nil {
+//                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
+//                }
+//                return
+//            }
+//            else if (result as? NSObject) == FlutterMethodNotImplemented {
+//              print("result is FlutterMethodNotImplemented")
+//                self.updateUrlTextFieldForIABController(navigationAction: navigationAction)
+//                if InAppWebView.windowWebViews[windowId] != nil {
+//                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
+//                }
+//                return
+//            }
+//            else {
+//              print("result is else")
+//                var handledByClient = false
+//                if result != nil, result is Bool {
+//                    handledByClient = result as! Bool
+//                }
+//                if !handledByClient, InAppWebView.windowWebViews[windowId] != nil {
+//                    InAppWebView.windowWebViews.removeValue(forKey: windowId)
+//                }
+//            }
+//        })
         
-        return windowWebView
+        return popupView!
     }
     
     public func webViewDidClose(_ webView: WKWebView) {
         let arguments: [String: Any?] = [:]
-        channel?.invokeMethod("onCloseWindow", arguments: arguments)
+//        channel?.invokeMethod("onCloseWindow", arguments: arguments)
+      webView.removeFromSuperview()
+      self.popupView = nil
     }
     
     public func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
